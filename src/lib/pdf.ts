@@ -1,5 +1,6 @@
-import { File, Paths } from 'expo-file-system';
+import * as FileSystem from 'expo-file-system/legacy';
 import * as Print from 'expo-print';
+import { Platform } from 'react-native';
 
 import { attendanceRangeLabel, daysInSelectedMonth, isDayInRange, monthLabel } from './calendar';
 import { entryHasGeneratedValues } from './generator';
@@ -41,8 +42,11 @@ function createRows(draft: DtrDraft): string {
       return `<tr class="non-working"><td class="day">${day}</td><td colspan="4">${escapeHtml(label.toUpperCase())}</td><td></td><td></td></tr>`;
     }
 
-    const hours = entry.undertimeMinutes === null ? '' : Math.floor(entry.undertimeMinutes / 60);
-    const minutes = entry.undertimeMinutes === null ? '' : entry.undertimeMinutes % 60;
+    const enteredUndertime = entry.undertimeManuallySet && entry.undertimeMinutes && entry.undertimeMinutes > 0
+      ? entry.undertimeMinutes
+      : null;
+    const hours = enteredUndertime === null ? '' : Math.floor(enteredUndertime / 60);
+    const minutes = enteredUndertime === null ? '' : enteredUndertime % 60;
     return `<tr>
       <td class="day">${day}</td>
       <td>${cellTime(entry.amArrival)}</td>
@@ -54,11 +58,13 @@ function createRows(draft: DtrDraft): string {
   }).join('');
 }
 
-function totals(draft: DtrDraft): { hours: number; minutes: number } {
+function totals(draft: DtrDraft): { hours: number; minutes: number } | null {
   const lastDay = daysInSelectedMonth(draft.year, draft.month);
-  const total = draft.entries
+  const entered = draft.entries
     .filter((entry) => isDayInRange(entry.day, draft.startDay, draft.endDay, lastDay))
-    .reduce((sum, entry) => sum + (entry.undertimeMinutes ?? 0), 0);
+    .filter((entry) => entry.undertimeManuallySet && entry.undertimeMinutes && entry.undertimeMinutes > 0);
+  if (!entered.length) return null;
+  const total = entered.reduce((sum, entry) => sum + (entry.undertimeMinutes ?? 0), 0);
   return { hours: Math.floor(total / 60), minutes: total % 60 };
 }
 
@@ -90,9 +96,7 @@ function createForm(draft: DtrDraft): string {
     (entry) => isDayInRange(entry.day, draft.startDay, draft.endDay, lastDay) && entryHasGeneratedValues(entry),
   );
   const total = totals(draft);
-  const certification = isUnverified
-    ? 'SAMPLE / UNVERIFIED — This document is for planning, testing, or review only. It does not certify actual attendance.'
-    : 'I certify on my honor that the above is a true and correct report of the hours of work performed, record of which was made daily at the time of arrival and departure from office.';
+  const certification = 'I certify on my honor that the above is a true and correct report of the hours of work performed, record of which was made daily at the time of arrival and departure from office.';
 
   return `<section class="form">
     ${isUnverified ? '<div class="watermark">SAMPLE / UNVERIFIED</div>' : ''}
@@ -113,11 +117,11 @@ function createForm(draft: DtrDraft): string {
         <tr><th>Arrival</th><th>Depar-<br>ture</th><th>Arrival</th><th>Depar-<br>ture</th><th>Hours</th><th>Min-<br>utes</th></tr>
       </thead>
       <tbody>${createRows(draft)}</tbody>
-      <tfoot><tr><td colspan="5" class="total-label">Total</td><td>${total.hours}</td><td>${total.minutes}</td></tr></tfoot>
+      <tfoot><tr><td colspan="5" class="total-label">Total</td><td>${total?.hours ?? ''}</td><td>${total?.minutes ?? ''}</td></tr></tfoot>
     </table>${createStrikeLayers(draft)}</div>
     <p class="certification">${certification}</p>
     <div class="signature-line">${escapeHtml(draft.employeeName)}</div>
-    <p class="verified-text">${isUnverified ? 'SUPERVISOR INFORMATION (NOT VERIFIED):' : 'VERIFIED as to the prescribed office hours:'}</p>
+    <p class="verified-text">VERIFIED as to prescribed office hours,</p>
     <div class="signature-line supervisor">${escapeHtml(draft.supervisorName)}</div>
     <div class="signature-label">${escapeHtml(draft.supervisorDesignation || 'Authorized Officer')}</div>
   </section>`;
@@ -176,16 +180,31 @@ export function dtrFilename(draft: DtrDraft): string {
 }
 
 export async function createDtrPdf(draft: DtrDraft): Promise<string> {
+  const needsScopedAndroidFile = Platform.OS === 'android';
   const result = await Print.printToFileAsync({
     html: createDtrHtml(draft),
     width: 595,
     height: 842,
     textZoom: 100,
+    base64: needsScopedAndroidFile,
   });
-  const source = new File(result.uri);
-  const target = new File(Paths.cache, dtrFilename(draft));
-  if (target.exists) target.delete();
-  source.copy(target);
-  return target.uri;
+  if (!result.uri) throw new Error('PDF generation did not return a local file URI.');
+
+  if (needsScopedAndroidFile) {
+    if (!result.base64) throw new Error('PDF generation did not return readable file data.');
+    if (!FileSystem.cacheDirectory) throw new Error('The application cache is unavailable.');
+
+    // In Expo Go, Print's host cache is outside the project's FileSystem scope. Write the
+    // returned bytes into this project's cache instead of trying to read or copy that URI.
+    const scopedUri = `${FileSystem.cacheDirectory}${dtrFilename(draft)}`;
+    await FileSystem.writeAsStringAsync(scopedUri, result.base64, {
+      encoding: FileSystem.EncodingType.Base64,
+    });
+    const fileInfo = await FileSystem.getInfoAsync(scopedUri);
+    if (!fileInfo.exists) throw new Error('The generated PDF could not be saved to the application cache.');
+    return scopedUri;
+  }
+
+  return result.uri;
 }
 

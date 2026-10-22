@@ -8,7 +8,7 @@ import {
   TimeValue,
 } from '../types/attendance';
 import { daysInSelectedMonth, isDayInRange } from './calendar';
-import { calculateUndertime, minutesToTime, timeToMinutes } from './validation';
+import { minutesToTime, timeToMinutes } from './validation';
 
 const RANGE_FIELDS: [keyof SampleRanges, keyof SampleRanges][] = [
   ['amArrivalStart', 'amArrivalEnd'],
@@ -108,6 +108,9 @@ export function validateSampleRanges(ranges: SampleRanges): string | null {
   if (bounds.some(([start, end]) => start === null || end === null || start > end)) {
     return 'Each sample range needs a valid start time that is not later than its end time.';
   }
+  if ((bounds[0][1] as number) >= 8 * 60) {
+    return 'AM Arrival must be before 8:00 AM.';
+  }
   for (let index = 1; index < bounds.length; index += 1) {
     if ((bounds[index][0] as number) <= (bounds[index - 1][1] as number)) {
       return 'Sample ranges must follow AM arrival, AM departure, PM arrival, then PM departure without overlap.';
@@ -160,8 +163,7 @@ export function generateSampleEntries(draft: DtrDraft, mode: AutoFillMode): DayE
       generatedFields: nextGeneratedFields,
       source: 'generated',
     };
-    const schedule = entry.weekday === 'Saturday' ? draft.saturdaySchedule : draft.regularSchedule;
-    return { ...candidate, undertimeMinutes: calculateUndertime(candidate, schedule) };
+    return candidate;
   });
 }
 
@@ -174,7 +176,6 @@ export function clearGeneratedEntries(entries: DayEntry[]): DayEntry[] {
     const next = { ...cleared, generatedFields: [] };
     return {
       ...next,
-      undertimeMinutes: null,
       source: hasPunches(next) ? 'manual' : 'empty',
     };
   });

@@ -5,24 +5,51 @@ import {
   DayEntry,
   DEFAULT_REGULAR_SCHEDULE,
   DEFAULT_SAMPLE_RANGES,
+  DEFAULT_SUPERVISOR_DESIGNATION,
+  DEFAULT_SUPERVISOR_NAME,
   DtrDraft,
   EMPTY_SCHEDULE,
+  WorkSchedule,
 } from '../types/attendance';
 
-const PREVIOUS_DEFAULT_SAMPLE_RANGES = {
-  amArrivalStart: '08:01',
-  amArrivalEnd: '08:10',
-  amDepartureStart: '12:00',
-  amDepartureEnd: '12:05',
-  pmArrivalStart: '12:55',
-  pmArrivalEnd: '13:00',
-  pmDepartureStart: '17:01',
-  pmDepartureEnd: '17:15',
+const PREVIOUS_DEFAULT_SAMPLE_RANGES = [
+  {
+    amArrivalStart: '08:01',
+    amArrivalEnd: '08:10',
+    amDepartureStart: '12:01',
+    amDepartureEnd: '12:15',
+    pmArrivalStart: '12:30',
+    pmArrivalEnd: '12:59',
+    pmDepartureStart: '17:01',
+    pmDepartureEnd: '17:15',
+  },
+  {
+    amArrivalStart: '08:01',
+    amArrivalEnd: '08:10',
+    amDepartureStart: '12:00',
+    amDepartureEnd: '12:05',
+    pmArrivalStart: '12:55',
+    pmArrivalEnd: '13:00',
+    pmDepartureStart: '17:01',
+    pmDepartureEnd: '17:15',
+  },
+] as const;
+
+const PREVIOUS_DEFAULT_REGULAR_SCHEDULE = {
+  amArrival: '08:00',
+  amDeparture: '12:00',
+  pmArrival: '13:00',
+  pmDeparture: '17:00',
 } as const;
 
 function hasPreviousDefaultSampleRanges(draft: DtrDraft): boolean {
-  return Object.entries(PREVIOUS_DEFAULT_SAMPLE_RANGES)
-    .every(([field, value]) => draft.sampleRanges[field as keyof typeof draft.sampleRanges] === value);
+  return PREVIOUS_DEFAULT_SAMPLE_RANGES.some((ranges) => Object.entries(ranges)
+    .every(([field, value]) => draft.sampleRanges[field as keyof typeof draft.sampleRanges] === value));
+}
+
+function hasPreviousDefaultRegularSchedule(draft: DtrDraft): boolean {
+  return Object.entries(PREVIOUS_DEFAULT_REGULAR_SCHEDULE)
+    .every(([field, value]) => draft.regularSchedule[field as keyof WorkSchedule] === value);
 }
 
 export function daysInSelectedMonth(year: number, month: number): number {
@@ -65,6 +92,7 @@ export function createMonthEntries(year: number, month: number): DayEntry[] {
       pmArrival: null,
       pmDeparture: null,
       undertimeMinutes: null,
+      undertimeManuallySet: false,
       source: 'empty',
       generatedFields: [],
       locked: false,
@@ -83,8 +111,8 @@ export function createDraft(
   return {
     version: 2,
     employeeName,
-    supervisorName: '',
-    supervisorDesignation: '',
+    supervisorName: DEFAULT_SUPERVISOR_NAME,
+    supervisorDesignation: DEFAULT_SUPERVISOR_DESIGNATION,
     year,
     month,
     ...range,
@@ -103,6 +131,11 @@ export function mergeDraftEntries(draft: DtrDraft): DtrDraft {
 
   return {
     ...draft,
+    supervisorName: draft.supervisorName?.trim() || DEFAULT_SUPERVISOR_NAME,
+    supervisorDesignation: draft.supervisorDesignation?.trim() || DEFAULT_SUPERVISOR_DESIGNATION,
+    regularSchedule: hasPreviousDefaultRegularSchedule(draft)
+      ? { ...EMPTY_SCHEDULE }
+      : draft.regularSchedule,
     sampleRanges: hasPreviousDefaultSampleRanges(draft)
       ? { ...DEFAULT_SAMPLE_RANGES }
       : draft.sampleRanges,
@@ -114,7 +147,13 @@ export function mergeDraftEntries(draft: DtrDraft): DtrDraft {
         : stored?.source === 'generated'
           ? ATTENDANCE_TIME_FIELDS.filter((field) => Boolean(stored[field]))
           : [];
-      return { ...merged, generatedFields };
+      const undertimeManuallySet = stored?.undertimeManuallySet === true;
+      return {
+        ...merged,
+        undertimeMinutes: undertimeManuallySet ? stored?.undertimeMinutes ?? null : null,
+        undertimeManuallySet,
+        generatedFields,
+      };
     }),
   };
 }

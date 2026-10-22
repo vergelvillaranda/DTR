@@ -52,6 +52,7 @@ function parseDraft(value: string | null): DtrDraft | null {
 function entryHasUserData(entry: DayEntry): boolean {
   return Boolean(
     entry.amArrival || entry.amDeparture || entry.pmArrival || entry.pmDeparture ||
+    (entry.undertimeManuallySet && entry.undertimeMinutes) ||
     entry.locked || entry.source !== 'empty' || entry.classification === 'holiday' || entry.classification === 'leave',
   );
 }

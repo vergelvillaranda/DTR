@@ -24,6 +24,7 @@ export interface DayEntry {
   pmArrival: TimeValue;
   pmDeparture: TimeValue;
   undertimeMinutes: number | null;
+  undertimeManuallySet?: boolean;
   source: 'empty' | 'manual' | 'generated';
   generatedFields: TimeField[];
   locked: boolean;
@@ -72,15 +73,12 @@ export const EMPTY_SCHEDULE: WorkSchedule = {
 };
 
 export const DEFAULT_REGULAR_SCHEDULE: WorkSchedule = {
-  amArrival: '08:00',
-  amDeparture: '12:00',
-  pmArrival: '13:00',
-  pmDeparture: '17:00',
+  ...EMPTY_SCHEDULE,
 };
 
 export const DEFAULT_SAMPLE_RANGES: SampleRanges = {
-  amArrivalStart: '08:01',
-  amArrivalEnd: '08:10',
+  amArrivalStart: '07:50',
+  amArrivalEnd: '07:59',
   amDepartureStart: '12:01',
   amDepartureEnd: '12:15',
   pmArrivalStart: '12:30',
@@ -88,4 +86,7 @@ export const DEFAULT_SAMPLE_RANGES: SampleRanges = {
   pmDepartureStart: '17:01',
   pmDepartureEnd: '17:15',
 };
+
+export const DEFAULT_SUPERVISOR_NAME = 'Charlie O. Villamarzo';
+export const DEFAULT_SUPERVISOR_DESIGNATION = 'Municipal PESO Manager';
 

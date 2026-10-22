@@ -46,12 +46,13 @@ export function TimeField({ label, value, onChange, compact = false, condensed =
           style={({ pressed }) => [
             styles.control,
             compact && styles.compactControl,
+            condensed && styles.condensedControl,
             disabled && styles.disabled,
             pressed && styles.pressed,
           ]}
         >
-          <Clock3 color={value ? colors.forest : colors.textMuted} size={condensed ? 12 : compact ? 15 : 17} />
-          <Text numberOfLines={1} style={[styles.value, condensed && styles.condensedValue, !value && styles.placeholder]}>{condensed ? value ?? '—' : formatTime(value)}</Text>
+          {condensed ? null : <Clock3 color={value ? colors.forest : colors.textMuted} size={compact ? 15 : 17} />}
+          <Text numberOfLines={1} style={[styles.value, condensed && styles.condensedValue, !value && styles.placeholder]}>{formatTime(value)}</Text>
         </Pressable>
         {showClear && value && !disabled ? (
           <Pressable
@@ -102,8 +103,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 11,
   },
   compactControl: { gap: 4, minHeight: 39, paddingHorizontal: 6 },
+  condensedControl: { paddingHorizontal: 3 },
   value: { color: colors.text, fontSize: 13, fontWeight: '700' },
-  condensedValue: { flexShrink: 1, fontSize: 11, letterSpacing: -0.2 },
+  condensedValue: { flex: 1, fontSize: 9.5, letterSpacing: -0.35, textAlign: 'center' },
   placeholder: { color: colors.textMuted, fontWeight: '500' },
   clear: { alignItems: 'center', height: 40, justifyContent: 'center', width: 30 },
   disabled: { backgroundColor: colors.surfaceMuted, opacity: 0.7 },

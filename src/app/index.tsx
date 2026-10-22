@@ -1,4 +1,3 @@
-import { File } from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
 import { CalendarDays, ChevronLeft, ChevronRight, Download, Edit3, Eye, FileCheck2, FileClock, FileText, MoreVertical, RotateCcw, Settings2, Sparkles, Trash2, UserRound, X } from 'lucide-react-native';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -11,7 +10,7 @@ import { clampDayRange, createDraft, daysInSelectedMonth, isDayInRange, monthLab
 import { autoFillFields, clearGeneratedEntries, entryHasGeneratedValues, generateSampleEntries, hasExistingEntries, validateAutoFillCompatibility, validateSampleRanges } from '../lib/generator';
 import { createDtrPdf } from '../lib/pdf';
 import { draftKey, loadActiveEmployee, loadMonthDraft, removeDraft, saveDraft } from '../lib/storage';
-import { calculateUndertime, isEntryComplete, validateEntry, validateSchedule } from '../lib/validation';
+import { isEntryComplete, validateEntry, validateSchedule } from '../lib/validation';
 import { colors } from '../theme';
 import { AutoFillMode, DayClassification, DayEntry, DtrDraft, SampleRanges, TimeField as TimeFieldName, TimeValue, WorkSchedule } from '../types/attendance';
 
@@ -143,10 +142,17 @@ export default function DtrScreen() {
     const candidate = { ...existing, [field]: value, generatedFields };
     const error = validateEntry(candidate);
     if (error) { Alert.alert('Invalid time', error); return; }
-    const schedule = candidate.weekday === 'Saturday' ? draft.saturdaySchedule : draft.regularSchedule;
     const hasPunches = Boolean(candidate.amArrival || candidate.amDeparture || candidate.pmArrival || candidate.pmDeparture);
-    updateEntry(day, () => ({ ...candidate, source: generatedFields.length ? 'generated' : hasPunches ? 'manual' : 'empty', undertimeMinutes: calculateUndertime(candidate, schedule) }));
-  }, [draft.entries, draft.regularSchedule, draft.saturdaySchedule, updateEntry]);
+    updateEntry(day, () => ({ ...candidate, source: generatedFields.length ? 'generated' : hasPunches ? 'manual' : 'empty' }));
+  }, [draft.entries, updateEntry]);
+
+  const changeUndertime = useCallback((day: number, minutes: number | null) => {
+    updateEntry(day, (entry) => ({
+      ...entry,
+      undertimeMinutes: minutes,
+      undertimeManuallySet: minutes !== null,
+    }));
+  }, [updateEntry]);
 
   const changeClassification = useCallback((day: number, classification: DayClassification) => {
     updateEntry(day, (entry) => ({
@@ -157,22 +163,20 @@ export default function DtrScreen() {
       pmArrival: classification === 'working' ? entry.pmArrival : null,
       pmDeparture: classification === 'working' ? entry.pmDeparture : null,
       undertimeMinutes: classification === 'working' ? entry.undertimeMinutes : null,
+      undertimeManuallySet: classification === 'working' ? entry.undertimeManuallySet : false,
       source: classification === 'working' ? entry.source : 'empty',
       generatedFields: classification === 'working' ? entry.generatedFields : [],
     }));
   }, [updateEntry]);
 
-  const clearDay = useCallback((day: number) => updateEntry(day, (entry) => ({ ...entry, amArrival: null, amDeparture: null, pmArrival: null, pmDeparture: null, undertimeMinutes: null, source: 'empty', generatedFields: [] })), [updateEntry]);
+  const clearDay = useCallback((day: number) => updateEntry(day, (entry) => ({ ...entry, amArrival: null, amDeparture: null, pmArrival: null, pmDeparture: null, undertimeMinutes: null, undertimeManuallySet: false, source: 'empty', generatedFields: [] })), [updateEntry]);
 
   const updateSchedule = useCallback((kind: 'regularSchedule' | 'saturdaySchedule', field: TimeFieldName, value: TimeValue) => {
     setDraft((current) => {
       const schedule = { ...current[kind], [field]: value };
       const error = Object.values(schedule).every(Boolean) ? validateSchedule(schedule) : null;
       if (error) { Alert.alert('Invalid official hours', error); return current; }
-      return { ...current, [kind]: schedule, verified: false, entries: current.entries.map((entry) => {
-        const applies = kind === 'saturdaySchedule' ? entry.weekday === 'Saturday' : entry.weekday !== 'Saturday';
-        return applies ? { ...entry, undertimeMinutes: calculateUndertime(entry, schedule) } : entry;
-      }) };
+      return { ...current, [kind]: schedule, verified: false };
     });
   }, []);
 
@@ -208,9 +212,7 @@ export default function DtrScreen() {
     try {
       const uri = await createDtrPdf(draft);
       if (action === 'preview') {
-        const file = new File(uri);
-        if (await file.canPreview()) await file.preview({ mimeType: 'application/pdf', title: 'DTR Preview' });
-        else if (await Sharing.isAvailableAsync()) await Sharing.shareAsync(uri, { dialogTitle: 'Preview or open DTR PDF', mimeType: 'application/pdf', UTI: 'com.adobe.pdf' });
+        if (await Sharing.isAvailableAsync()) await Sharing.shareAsync(uri, { dialogTitle: 'Preview or open DTR PDF', mimeType: 'application/pdf', UTI: 'com.adobe.pdf' });
         else Alert.alert('Preview unavailable', 'No PDF viewer is available on this device.');
       } else if (await Sharing.isAvailableAsync()) await Sharing.shareAsync(uri, { dialogTitle: 'Export DTR PDF', mimeType: 'application/pdf', UTI: 'com.adobe.pdf' });
       else Alert.alert('Sharing unavailable', 'The PDF was created, but this device cannot open a share sheet.');
@@ -271,7 +273,7 @@ export default function DtrScreen() {
 
   return <SafeAreaView edges={['top']} style={styles.safeArea}>
     <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.flex}>
-      <FlatList contentContainerStyle={styles.list} data={selectedEntries} keyboardShouldPersistTaps="handled" keyExtractor={(item) => item.date} ListFooterComponent={footer} ListHeaderComponent={header} renderItem={({ item }) => <View style={styles.dayWrapper}><DayCard entry={item} onClassificationChange={(classification) => changeClassification(item.day, classification)} onClear={() => clearDay(item.day)} onLabelChange={(label) => updateEntry(item.day, (entry) => ({ ...entry, label }))} onTimeChange={(field, value) => changeTime(item.day, field, value)} onToggleLock={() => updateEntry(item.day, (entry) => ({ ...entry, locked: !entry.locked }))} /></View>} />
+      <FlatList contentContainerStyle={styles.list} data={selectedEntries} keyboardShouldPersistTaps="handled" keyExtractor={(item) => item.date} ListFooterComponent={footer} ListHeaderComponent={header} renderItem={({ item }) => <View style={styles.dayWrapper}><DayCard entry={item} onClassificationChange={(classification) => changeClassification(item.day, classification)} onClear={() => clearDay(item.day)} onLabelChange={(label) => updateEntry(item.day, (entry) => ({ ...entry, label }))} onTimeChange={(field, value) => changeTime(item.day, field, value)} onToggleLock={() => updateEntry(item.day, (entry) => ({ ...entry, locked: !entry.locked }))} onUndertimeChange={(minutes) => changeUndertime(item.day, minutes)} /></View>} />
     </KeyboardAvoidingView>
     <View style={styles.bottomBar}>
       <View style={styles.exportRow}>
@@ -319,7 +321,7 @@ function ScheduleFields({ title, schedule, onChange }: { title: string; schedule
 
 function ScheduleModal({ visible, onClose, draft, onChange }: { visible: boolean; onClose: () => void; draft: DtrDraft; onChange: (kind: 'regularSchedule' | 'saturdaySchedule', field: TimeFieldName, value: TimeValue) => void }) {
   const schedules: ('regularSchedule' | 'saturdaySchedule')[] = ['regularSchedule', 'saturdaySchedule'];
-  return <ModalShell title="Official working hours" subtitle="Used to calculate late arrival and early departure." visible={visible} onClose={onClose}><FlatList contentContainerStyle={styles.modalContent} data={schedules} keyExtractor={(item) => item} renderItem={({ item }) => <ScheduleFields title={item === 'regularSchedule' ? 'Regular days' : 'Saturdays'} schedule={draft[item]} onChange={(field, value) => onChange(item, field, value)} />} ListFooterComponent={<Text style={styles.helperText}>Undertime is the sum of late arrivals and early departures against these four boundaries. Missing punches remain “Incomplete” and are never assumed.</Text>} /></ModalShell>;
+  return <ModalShell title="Official working hours" subtitle="Shown on both copies of the DTR." visible={visible} onClose={onClose}><FlatList contentContainerStyle={styles.modalContent} data={schedules} keyExtractor={(item) => item} renderItem={({ item }) => <ScheduleFields title={item === 'regularSchedule' ? 'Regular days' : 'Saturdays'} schedule={draft[item]} onChange={(field, value) => onChange(item, field, value)} />} ListFooterComponent={<Text style={styles.helperText}>Undertime stays blank unless it is entered manually in a day’s record options.</Text>} /></ModalShell>;
 }
 
 function AutoFillModal({ visible, onClose, ranges, onChange, onGenerate, mode, onModeChange, startDay, endDay }: { visible: boolean; onClose: () => void; ranges: SampleRanges; onChange: (field: keyof SampleRanges, value: TimeValue) => void; onGenerate: () => void; mode: AutoFillMode; onModeChange: (mode: AutoFillMode) => void; startDay: number; endDay: number }) {

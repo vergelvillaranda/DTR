@@ -82,8 +82,7 @@ export function calculateUndertime(entry: DayEntry, schedule: WorkSchedule): num
 }
 
 export function describeUndertime(minutes: number | null): string {
-  if (minutes === null) return 'Incomplete punches';
-  if (minutes === 0) return 'No undertime';
+  if (minutes === null || minutes <= 0) return '';
   const hours = Math.floor(minutes / 60);
   const remainder = minutes % 60;
   return `${hours ? `${hours} hr${hours === 1 ? '' : 's'} ` : ''}${remainder} min undertime`.trim();
