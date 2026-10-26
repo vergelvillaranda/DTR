@@ -99,7 +99,7 @@ function createForm(draft: DtrDraft): string {
   const certification = 'I certify on my honor that the above is a true and correct report of the hours of work performed, record of which was made daily at the time of arrival and departure from office.';
 
   return `<section class="form">
-    ${isUnverified ? '<div class="watermark">SAMPLE / UNVERIFIED</div>' : ''}
+    ${isUnverified ? '<div class="sample-label" role="note">SAMPLE / UNVERIFIED</div>' : ''}
     <div class="form-number">Civil Service Form No. 48</div>
     <h1>DAILY TIME RECORD</h1>
     <div class="ornament">-----o0o-----</div>
@@ -166,7 +166,7 @@ export function createDtrHtml(draft: DtrDraft): string {
     .signature-label { margin-top: 0.4mm; text-align: center; text-transform: uppercase; font-size: 6.5pt; font-weight: 700; }
     .verified-text { margin: 3mm 0 4mm; font-size: 7pt; font-style: italic; text-align: center; }
     .signature-line.supervisor { height: 6mm; }
-    .watermark { position: absolute; z-index: 4; top: 95mm; left: 4mm; transform: rotate(-45deg); color: rgba(130, 26, 26, 0.11); font-size: 16pt; font-weight: 800; letter-spacing: 0.7mm; white-space: nowrap; pointer-events: none; }
+    .sample-label { position: absolute; z-index: 4; top: 0; right: 1.3mm; border: 0.2mm solid #8a2d2d; border-radius: 0.6mm; background: #fff; color: #7a1f1f; font-size: 5.8pt; font-weight: 800; letter-spacing: 0.2mm; line-height: 1; padding: 0.75mm 1.1mm 0.65mm; white-space: nowrap; pointer-events: none; }
   </style></head><body><main class="page">${form}${form}</main></body></html>`;
 }
 
